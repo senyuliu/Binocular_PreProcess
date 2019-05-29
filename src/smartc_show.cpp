@@ -161,7 +161,7 @@ int PreProcess(int argc, string pathin, string pathout, MyViz* mviz)
     }
 
     int progress_value = 1; 
-    mviz->showprogress(progress_value);  //设置当前的运行值
+    mviz->showprogress(progress_value);  //设置DISPLAY
     DLOG(INFO)<<"smartc_show: PreProcess :   mviz->showprogress_OVER";
 
     std::string Rawdata_path= pathin ;
