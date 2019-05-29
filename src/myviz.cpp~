@@ -1,0 +1,525 @@
+#include <QSlider>
+#include <QLabel>
+#include <QtGui/QApplication>
+#include <QMovie>
+#include <QGridLayout>
+#include <QVBoxLayout>
+#include <QPainter>
+#include <QPen>
+
+#include "rviz/visualization_manager.h"
+#include "rviz/render_panel.h"
+#include "rviz/display.h"
+
+#include "myviz.h"
+
+//global controls
+extern bool close_flag;
+extern int  save_control;
+extern float cam_gain;
+extern float cam_shulter;
+
+// BEGIN_TUTORIAL
+// Constructor for MyViz.  This does most of the work of the class.
+MyViz::MyViz( QWidget* parent )
+  : QWidget( parent )
+{
+  //normal parameters
+  std::cout<<"create of my_rviz3_001:"<<std::endl;
+  setWindowFlags(Qt::CustomizeWindowHint|Qt::WindowMinimizeButtonHint|Qt::WindowMaximizeButtonHint|Qt::WindowStaysOnTopHint);
+  width  = 200;
+  height = 400;
+  this->sizeHint();
+
+  // Construct and lay out labels and slider controls.
+  //size of cell
+  cell_size_label = new QLabel( "Scam_shuter " );
+  cell_size_slider = new QSlider( Qt::Horizontal );
+  cell_size_slider->setMinimum( 1 );
+  cell_size_slider->setMaximum( 50 );
+  //thickness of cell
+  thickness_label = new QLabel( "Gcam_gain " );
+  thickness_slider = new QSlider( Qt::Horizontal );
+  thickness_slider->setMinimum( 1 );
+  thickness_slider->setMaximum( 50 );
+
+  //test of cell
+  cell_test_label   = new QLabel("Gcam_gain");
+  cell_test_slider = new QSlider( Qt::Horizontal);
+  cell_test_slider->setMinimum(1);
+  cell_test_slider->setMaximum(50);
+  //push_button
+  push_start_label  = new QLabel("Push start");
+  push_start_button = new QPushButton("Start",this);
+  //push_end_button   = new QPushButton("Pause",this);
+  push_out_button   = new QPushButton("Exit",this);
+  //line edit
+  cam_fps_label     = new QLabel("Cam fps");
+  cam_fps_edit      = new QLineEdit( this);
+  cam_fps_edit->setReadOnly(true);
+  cam_fps_edit->setFocusPolicy(Qt::NoFocus);
+  //image label
+  cam_image_label   = new QLabel("Cam image");
+  cam_image         = new QImage("./src/pic/green.jpg");
+
+  QPixmap pixmapToShow = QPixmap::fromImage( cam_image->scaled(40,200, Qt::KeepAspectRatio) );
+
+  cam_image_label->setPixmap(pixmapToShow);
+  //QGridLayout
+  controls_layout = new QGridLayout();
+
+  controls_layout->setMargin(10);
+  controls_layout->setSpacing(10);
+  //push button
+  //controls_layout->addWidget( push_start_label, 0, 0);
+  controls_layout->addWidget( push_start_button, 8, 0,1,2);
+  //controls_layout->addWidget( push_end_button, 0, 1);
+  controls_layout->addWidget( push_out_button, 8,2 );
+  //cam fps
+  controls_layout->addWidget( cam_fps_label, 1, 1);
+  controls_layout->addWidget( cam_fps_edit, 2, 1);
+
+  //cam gps
+  QLabel* cam_gps_label = new QLabel("GNSS State");
+  controls_layout->addWidget( cam_gps_label, 5, 2);
+  controls_layout->addWidget( cam_image_label,6,2);
+
+  //imu time count
+  QLabel* imu_time_label = new QLabel("Location");
+  imu_time_edit          = new QLineEdit(this);
+  imu_time_edit->setReadOnly(true);
+  imu_time_edit->setFocusPolicy(Qt::NoFocus);
+
+  controls_layout->addWidget( imu_time_label, 1, 0);
+  controls_layout->addWidget( imu_time_edit, 2, 0);
+  //imu time speed
+  QLabel* imu_speed_label= new QLabel("Speed(km/h)");
+  imu_speed_edit         = new QLineEdit(this);
+  imu_speed_edit->setReadOnly(true);
+  imu_speed_edit->setFocusPolicy(Qt::NoFocus);
+
+  controls_layout->addWidget( imu_speed_label, 5, 0);
+  controls_layout->addWidget( imu_speed_edit, 6, 0);
+
+  //image lidar
+  QLabel* lidar_GPRMC_label   = new QLabel("GPRMC");
+  lidar_image_label          = new QLabel("GPRMCS");
+  lidar_image                = new QImage("./src/pic/green.jpg");
+
+  QPixmap pixmapToShow_lidar = QPixmap::fromImage( lidar_image->scaled(40,200, Qt::KeepAspectRatio) );
+
+  lidar_image_label->setPixmap(pixmapToShow_lidar);
+
+  controls_layout->addWidget( lidar_image_label, 2, 2);
+  controls_layout->addWidget( lidar_GPRMC_label, 1, 2);
+
+  //image pps
+  QLabel * lidar_ImagePPS_labels = new QLabel("PPS");
+  lidar_ImagePPS_label          = new QLabel("PPSS");
+  lidar_image_PPS               = new QImage("./src/pic/green.jpg");
+
+  QPixmap pixmapToShow_lidar_PPS = QPixmap::fromImage( lidar_image_PPS->scaled(40,200, Qt::KeepAspectRatio) );
+
+  lidar_ImagePPS_label->setPixmap(pixmapToShow_lidar_PPS);
+
+  controls_layout->addWidget( lidar_ImagePPS_labels, 3, 2);
+  controls_layout->addWidget( lidar_ImagePPS_label, 4, 2);
+
+  //image speed
+  QLabel* speed_labels = new QLabel("Speed State");
+  speed_image_label    = new QLabel("Speed States");
+  speed_image          = new QImage;
+
+  //test
+  //QImage* img = new QImage;
+  if(!(speed_image->load("./src/pic/green.jpg")))
+  {
+        QMessageBox::information(this,"open image error","open image error!!!!");
+        return;
+  }
+
+  QPixmap pixmapToShow_speed = QPixmap::fromImage( speed_image->scaled(40,200, Qt::KeepAspectRatio) );
+
+  speed_image_label->setPixmap(pixmapToShow_speed);
+
+  controls_layout->addWidget( speed_labels, 5, 1);
+  controls_layout->addWidget( speed_image_label, 6, 1);
+
+  //GNSS
+  QLabel * gnss_num_label = new QLabel("GNSS Num");
+  label_GNSS_num          = new QLineEdit(this);
+  label_GNSS_num->setReadOnly(true);
+  label_GNSS_num->setFocusPolicy(Qt::NoFocus);
+
+  controls_layout->addWidget( gnss_num_label, 3, 0);
+  controls_layout->addWidget( label_GNSS_num, 4, 0);
+
+  //GNSS label
+  QLabel * gnss_pdop_label  = new QLabel("GNSS HDOP");
+  label_GNSS_pdop           = new QLineEdit(this);
+  label_GNSS_pdop->setReadOnly(true);
+  label_GNSS_pdop->setFocusPolicy(Qt::NoFocus);
+
+  controls_layout->addWidget( gnss_pdop_label, 3, 1);
+  controls_layout->addWidget( label_GNSS_pdop, 4, 1);
+
+  //UTC
+  QLabel * time_utc_label = new QLabel("Date");
+  label_UTC_time          = new QLineEdit(this);
+  label_UTC_time->setReadOnly(true);
+  label_UTC_time->setFocusPolicy(Qt::NoFocus);
+
+  //controls_layout->addWidget( time_utc_label, 5, 2);
+  controls_layout->addWidget( label_UTC_time, 7, 2);
+
+  //label_state
+  QLabel * state_all_label = new QLabel("State Bar");
+
+  label_state              = new QLineEdit(this);
+  label_state->setReadOnly(true);
+  label_state->setFocusPolicy(Qt::NoFocus);
+
+  controls_layout->addWidget( state_all_label, 7, 0);
+  controls_layout->addWidget( label_state, 7, 1);
+  
+   // shulter
+  //controls_layout->addWidget(cell_size_label,0,0);
+  //controls_layout->addWidget(cell_size_slider,0,1,1,2);
+
+   // gain
+  controls_layout->addWidget(cell_test_label,10,0);
+  controls_layout->addWidget(cell_test_slider,10,1,1,2);
+  // Construct and lay out render panel.
+  label_imu   = new QLabel("Imu          State: ");
+  label_cam   = new QLabel("Camera   State: ");
+  label_lidar = new QLabel("Lidar        State: ");
+  std::cout<<"create of my_rviz3_003:"<<std::endl;
+
+  main_layout = new QVBoxLayout;
+
+  main_layout->addLayout( controls_layout );
+
+  // Set the top-level layout for this MyViz widget.
+  setLayout( main_layout );
+
+  connect( push_start_button,SIGNAL( clicked()), this, SLOT(onButtonClicked(void)));
+  connect( push_out_button,SIGNAL( clicked()), this, SLOT(onButtonOutClicked(void)));
+  //connect( thickness_slider,SIGNAL(valueChanged(int)),this, SLOT(setThickness(int)));
+  connect( cell_size_slider,SIGNAL(valueChanged(int)),this, SLOT(setCellSize(int)));
+  connect( cell_test_slider,SIGNAL(valueChanged(int)),this, SLOT(setCelltest(int)));
+
+  cam_fps_edit->setPlaceholderText("0");
+  
+ 
+  //cell_size_slider->setValue(1.0);
+  //cell_test_slider->setValue(2.0);
+  showSpeed(100);
+  showState(100);
+
+}
+
+// Destructor.
+MyViz::~MyViz()
+{
+  delete manager_cam;
+}
+
+// cam_gain property.
+void MyViz::setThickness( int thickness_percent )
+{
+    cam_gain  = thickness_percent;
+    cell_size_slider->setValue(thickness_percent);
+}
+
+// "Cell Size cam_shulter" Property.
+void MyViz::setCellSize( int cell_size_percent )
+{
+    cam_shulter = cell_size_percent;
+    cell_size_slider->setValue(cell_size_percent);
+}
+void MyViz::setCelltest( int cell_test_percent )
+{
+    cam_gain  = thickness_percent;
+    cell_size_slider->setValue(thickness_percent);
+}
+void MyViz::setcellchange(int cell_change)
+{
+
+}
+
+int flag_start = 0;
+int flag_end   = 0;
+int flag_exit  = 0;
+void MyViz::onButtonClicked(void)
+{
+    close_flag   = false;
+    save_control = !save_control;
+    if(save_control)
+    {
+        push_start_button->setText("Pause");
+    }
+    else
+    {
+        push_start_button->setText("Start");
+    }
+    if(flag_start == 0 )
+    {
+        flag_start = 1;
+    }
+}
+void MyViz::onButtonEndClicked(void)
+{
+    if(flag_start==1&&flag_end==0)
+    {
+        close_flag = false;
+        flag_end==1;
+    }
+
+}
+void MyViz::onButtonOutClicked(void)
+{
+    close_flag = true;
+    FILE *ppse;
+    if((ppse = popen("sh ./src/tools/node_kill_exit.sh","r")) == NULL)
+    {
+         printf("popen() error!/n");
+         exit(1);
+    }
+}
+void MyViz::setgpstate(bool state)
+{
+   QImage tmpImg(state? "./src/pic/green.jpg": "./src/pic/red.jpg");
+
+   QPixmap pixmapToShow = QPixmap::fromImage( tmpImg.scaled(40,200, Qt::KeepAspectRatio) );
+
+   if(cam_image_label!=NULL)
+   {
+       cam_image_label->setPixmap(pixmapToShow);
+   }
+}
+void MyViz::setGPRMCstate(bool state)
+{
+   QImage tmpImg(state? "./src/pic/green.jpg": "./src/pic/red.jpg");
+
+   QPixmap pixmapToShow = QPixmap::fromImage( tmpImg.scaled(40,200, Qt::KeepAspectRatio) );
+   if(lidar_image_label!=NULL)
+   {
+        lidar_image_label->setPixmap(pixmapToShow);
+   }
+  
+}
+void MyViz::setPPSstate(bool state)
+{
+    QImage tmpImg(state? "./src/pic/green.jpg": "./src/pic/red.jpg");
+    QPixmap pixmapToShow = QPixmap::fromImage( tmpImg.scaled(40,200, Qt::KeepAspectRatio) );
+    if(lidar_ImagePPS_label!=NULL)
+    {
+       lidar_ImagePPS_label->setPixmap(pixmapToShow);
+    }
+}
+
+void MyViz::setSpeedstate(void)
+{
+
+  if(!(speed_image->load("./src/pic/red.jpg")))
+  {
+        QMessageBox::information(this,"open image error","open image error!!");
+        return;
+  }
+
+  QPixmap pixmapToShow_speed = QPixmap::fromImage( speed_image->scaled(40,200, Qt::KeepAspectRatio) );
+  
+  if(speed_image_label!=NULL)
+  {
+      speed_image_label->setPixmap(pixmapToShow_speed);
+  }
+  
+
+}
+
+void MyViz::setTimestate(void)
+{
+      timespec time_sys_start;
+      clock_gettime(CLOCK_REALTIME, &time_sys_start);
+
+
+      long time_se  = time_sys_start.tv_sec;
+      long time_nse = time_sys_start.tv_nsec;
+      time_t timep = g_data_Infos.GPStime;//time_se;
+
+      struct tm* timeinfo;
+      timeinfo = localtime(&timep);
+
+      char* timestamp = new char[64];
+      strftime(timestamp,64,"%H-%M-%S",timeinfo);
+
+      QString text_edit = QString(timestamp);
+
+      label_UTC_time->setPlaceholderText(text_edit);
+}
+void MyViz::showSpeed(int speed)
+{
+    int timestamp     = speed;
+    QString text_edit = QString::number(timestamp);
+    imu_speed_edit->setPlaceholderText(text_edit);
+}
+void MyViz::showState(int stat)
+{
+    int timestamp     = stat;
+    QString text_edit = QString::number(timestamp);
+    label_state->setPlaceholderText(text_edit);
+}
+void MyViz::showImucnt(int imucnt)
+{
+    int timestamp     = imucnt;
+    QString text_edit = QString::number(timestamp);
+    imu_time_edit->setPlaceholderText(text_edit);
+}
+void MyViz::show_GNSS_num(int gnss_num)
+{
+    int timestamp     = gnss_num;
+    QString text_edit = QString::number(timestamp);
+    label_GNSS_num->setPlaceholderText(text_edit);
+}
+/*struct data_Infos_t
+{
+    double GPStime;
+    double lat;
+    double lon;
+    double hei;
+    double current_speed;
+    unsigned char nsv1_num;
+    unsigned char nsv2_num;
+};*/
+const int g_speed = 100;
+void MyViz::show_g_data_center_st(ntd_info_process::processed_infor_msg& g_data_Infos)
+{
+
+    double GPStime = g_data_Infos.GPStime;
+    double lat     = g_data_Infos.latlonhei.lat;
+    double lon     = g_data_Infos.latlonhei.lon;
+    double hei     = g_data_Infos.latlonhei.hei;
+    double current_speed    = g_data_Infos.current_speed;
+    unsigned char nsv1_num  = g_data_Infos.nsv1_num;
+    unsigned char nsv2_num  = g_data_Infos.nsv2_num;
+	double cam_fps = g_data_Infos.camera_fps;
+	double hdop    = g_data_Infos.hdop;
+	string pps_status     = g_data_Infos.pps_status;
+	int    nosv_422       = g_data_Infos.noSV_422;
+	double latitude_422   = g_data_Infos.latitude;
+    double longitude_422  = g_data_Infos.longitude;
+
+    QString text_GPStime = QString::number(GPStime);
+    QString text_lat     = QString::number(lat);
+    QString text_lon     = QString::number(lon);
+    QString text_hei     = QString::number(hei);
+    QString text_current_speed = QString::number(current_speed);
+    QString text_nsv1_num  = QString::number(nsv1_num);
+    QString text_nsv2_num  = QString::number(nsv2_num);
+	QString text_cam_fps   = QString::number(cam_fps);
+	QString text_hdop      = QString::number(hdop);
+	QString text_pps_status= QString::fromStdString(pps_status);
+	QString text_nosv_num  = QString::number(nosv_422);
+
+	QString text_latitude_422  = QString::number(latitude_422);
+	QString text_longitude_422  = QString::number(longitude_422);
+
+    QString text_GPS_State = text_latitude_422 + " , " + text_longitude_422;
+    QString text_GPS_Num   = text_nsv1_num +"   " + text_nsv2_num;
+
+    //imu
+    QString text_error_neg1 = "signal is invalid!";
+    QString text_error_neg2 = "signal is lost!";
+    if(NULL!=imu_time_edit)
+    {
+        imu_time_edit->setPlaceholderText(text_GPS_State);
+    }
+    
+	if(current_speed==-1 && imu_speed_edit != NULL)
+	{
+		imu_speed_edit->setPlaceholderText(text_error_neg1);
+	}
+	else if(current_speed == -2 && imu_speed_edit != NULL)
+	{
+		imu_speed_edit->setPlaceholderText(text_error_neg2);
+	}
+	else if( imu_speed_edit != NULL)
+	{
+		current_speed = int(current_speed * 3.6);
+		QString text_current_speed_ok = QString::number(int(current_speed));
+
+		imu_speed_edit->setPlaceholderText(text_current_speed_ok);
+		if(current_speed > 120)
+        {
+            setSpeedstate();
+        }
+	}
+
+
+	if(nosv_422 == -1 && label_GNSS_num != NULL)
+	{
+	    label_GNSS_num->setPlaceholderText(text_error_neg1);
+	}
+	else if(nosv_422 == -2 && label_GNSS_num != NULL)
+	{
+		label_GNSS_num->setPlaceholderText(text_error_neg2);
+	}
+	else if(label_GNSS_num != NULL)
+	{
+		label_GNSS_num->setPlaceholderText(text_nosv_num);
+	}
+
+    if(latitude_422 == -1 && imu_time_edit != NULL)
+    {
+      imu_time_edit->setPlaceholderText(text_error_neg1);
+    }
+    else if(latitude_422 == -2&& imu_time_edit != NULL)
+    {
+      imu_time_edit->setPlaceholderText(text_error_neg2);
+    }
+    else if(imu_time_edit != NULL)
+    {
+      imu_time_edit->setPlaceholderText(text_GPS_State);
+    }
+
+
+    //label_state
+    if(NULL!=label_state)
+    {
+        label_state->setPlaceholderText(text_nsv2_num);
+    }
+
+	//cam_fps
+	if(NULL!=cam_fps_edit)
+	{
+	    cam_fps_edit->setPlaceholderText(text_cam_fps);
+	}
+
+	//hdop
+	if(hdop == -1 && label_GNSS_pdop != NULL)
+	{
+		label_GNSS_pdop->setPlaceholderText(text_error_neg1);
+	}
+	else if(hdop == -2 && label_GNSS_pdop != NULL)
+	{
+		label_GNSS_pdop->setPlaceholderText(text_error_neg2);
+	}
+	else if(label_GNSS_pdop != NULL)
+	{
+		label_GNSS_pdop->setPlaceholderText(text_hdop);
+	}
+
+	//pps
+	if(label_state!=NULL)
+	{
+	    label_state->setPlaceholderText(text_pps_status);
+	}
+	QEventLoop eventloop;  
+    QTimer::singleShot(10, &eventloop, SLOT(quit())); //wait ms  
+    eventloop.exec();
+
+}
+QSize MyViz::sizeHint() const
+ {
+     return QSize( 450, 350 );
+ }

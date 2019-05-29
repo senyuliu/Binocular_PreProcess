@@ -1,0 +1,279 @@
+#include<ros/ros.h>
+#include<image_transport/image_transport.h>
+#include<opencv2/core/core.hpp>
+#include<opencv2/highgui/highgui.hpp>
+#include<opencv2/imgproc/imgproc.hpp>
+#include<cv_bridge/cv_bridge.h>
+#include<std_msgs/String.h>
+#include<std_msgs/Int64.h>
+#include<FlyCapture2.h>
+#include"./lock.h"
+#include<stdio.h>
+#include<iostream>
+#include <pthread.h>
+#include <unistd.h>
+#include <vector>
+#include <string>
+
+//--rviz-test
+#include "myviz.h"
+#include <QApplication>
+//#include <ros/ros.h>
+#include <QWidget>
+#include <QDialog>
+#include "Dialog.h"
+
+//--rviz-msg
+#include<std_msgs/Int64.h>
+#include<std_msgs/Float64.h>
+//#define NDEBUG
+#undef NDEBUG
+#include <glog/logging.h>
+
+
+namespace rviz
+{
+class Display;
+class RenderPanel;
+class VisualizationManager;
+}
+
+
+using namespace std;
+using namespace cv;
+using namespace FlyCapture2;
+
+//global control
+bool close_flag   = false;
+int  save_control = 0;
+float cam_shulter= 20.0;
+float cam_gain   = 20.0;
+
+//sub_callback
+int data_get = 0;
+int data_get_imucnt = 0;
+void chatterCallBack(const std_msgs::Int64::ConstPtr& msg)
+{
+    //ROS_INFO("I heard: [%d]",msg->data);
+    cout<<msg->data<<endl;
+    data_get = msg->data;
+}
+
+//data_Infos_t g_data_Infos;
+ntd_info_process::processed_infor_msg g_data_Infos;
+
+void sub_data_center_CallBack(const ntd_info_process::processed_infor_msg::ConstPtr& pInfos)
+{
+	g_data_Infos =  *pInfos;      
+}
+
+//imu_cnt
+void imu_cnt_chatterCallBack(const std_msgs::Int64::ConstPtr& msg)
+{
+    cout<<msg->data<<endl;
+    data_get_imucnt = msg->data;
+}
+//gnss_num
+int data_get_gnssnum = 0;
+void gnss_num_chatterCallBack(const std_msgs::Int64::ConstPtr& msg)
+{
+    cout<<msg->data<<endl;
+    data_get_gnssnum = msg->data;
+}
+//thread1-time get
+void *thread(void *ptr)
+{
+   cout<<"this is the thread !"<<endl;
+   //get_time();
+}
+struct g_rviz_st
+{
+    ros::NodeHandle*  nh;
+    MyViz*           myviz;
+    QApplication*   app;
+} global_param;
+
+//thread2-image save
+void *thread_save(void *ptr)
+{
+    cout<<"this is the thread 2 !"<<endl;
+}
+//thread3-rviz change
+void *thread_rviz(void* ptr)
+{
+    MyViz* myviz = (MyViz*)ptr;
+    myviz->show();
+
+    cout<<"thread - rviz is ok!"<<endl;
+}
+//thread4-rviz msg
+void *thread_msg(void* ptr)
+{   
+   g_rviz_st * global_param = (g_rviz_st *) ptr;
+   ros::Rate   loop_rate(1);
+   QApplication* app        = global_param->app;
+   while(global_param->nh->ok())
+   {
+       ros::spinOnce();
+       loop_rate.sleep();
+
+       global_param->myviz->show_g_data_center_st(g_data_Infos);
+       
+   } 
+ 
+   ros::spin();
+}
+
+int main(int argc, char** argv)
+{
+    //return 0;
+    //[-1]rviz test
+    google::InitGoogleLogging(argv[0]);
+    if(!ros::isInitialized())
+    {
+        ros::init(argc,argv, "myviz");//, ros::init_options::AnonymousName);
+    }
+
+    ros::NodeHandle nh;
+    ros::Subscriber sub          = nh.subscribe("processed_infor_msg",0,sub_data_center_CallBack);
+   
+    ros::Publisher  pub_msg_save = nh.advertise<std_msgs::Int64>("msg_save_control",1); 
+    std_msgs::Int64 msg_save_control;
+    
+    ros::Publisher  pub_msg_shulter = nh.advertise<std_msgs::Float64>("cam_shulter",1);
+    std_msgs::Float64 msg_cam_shulter;
+    
+    ros::Publisher  pub_msg_gain = nh.advertise<std_msgs::Float64>("cam_gain",1);
+    std_msgs::Float64 msg_cam_gain;
+    
+    QApplication app(argc,argv);   
+    LOG(INFO)<<"QApplication in...!" <<endl;
+    //[0]thread of myviz
+
+    MyViz* myviz = new MyViz();
+
+    myviz->show();
+
+    myviz->setDisabled(true);
+
+    //[1]thread of msg get
+
+    global_param.nh    = &nh;
+
+    global_param.myviz = myviz;
+
+    global_param.app   = &app;   
+
+    pthread_t id_msg;
+
+    int ret_msg = pthread_create(&id_msg, NULL, thread_msg ,&global_param);
+
+    if(ret_msg)
+    {
+        LOG(INFO)<<"create pthread_msg error!" <<endl;
+        return 1;
+    }
+    LOG(INFO)<<"pthread_create in...!" <<endl;
+    //[2] sleep to show
+    Dialog dlg;
+    int dlg_flag = 0;    
+    double time_last= 3.0;
+
+    while(ros::ok())
+    {
+ 
+        //speed
+        double current_speed = int(g_data_Infos.current_speed * 3.6);
+		
+        if(current_speed > 120)
+        {
+            myviz->setSpeedstate();
+        }
+
+		bool is_gps_ok   = ((g_data_Infos.latitude - 0) > 0.0001 && (g_data_Infos.longitude - 0)> 0.0001) ? true: false;
+		myviz->setgpstate(is_gps_ok);
+        
+        bool is_gprmc_ok = (g_data_Infos.is_gprmc_valid=="A")? true: false;
+		myviz->setGPRMCstate(is_gprmc_ok);
+
+  
+        bool is_pps_ok  = (g_data_Infos.pps_status == "PPS locked") ? true : false;
+        myviz->setPPSstate(is_pps_ok);
+        
+        //count down
+        static int m = 0;
+		if((g_data_Infos.latitude - 0) > 0.0001 && (g_data_Infos.longitude - 0)> 0.0001 && m == -1)
+		{
+			m = 0;
+		}
+        ros::Time begin;
+        double    time_beg;
+        if(m==0)
+        {
+            dlg.show();
+            m = 1;
+
+            begin    = ros::Time::now();
+            time_beg = begin.toSec();
+        }
+        else if(m == 1)
+        {
+            ros::Time end = ros::Time::now();
+            double time_end  = end.toSec();
+
+            QString text_str  = "IMU : ";
+    
+            double time_diff  = time_last - (time_end - time_beg);
+            QString text_time = QString::number(int(time_diff));
+
+            text_time  = text_str + text_time;
+            if(dlg.line_edit!=NULL)
+            {
+                dlg.line_edit->setPlaceholderText(text_time);
+            }            
+            if((time_diff - 0)<0.0000001)
+            {
+                dlg_flag = 1;
+                m        = 2;
+            }
+        }
+        if(dlg_flag==1)
+        {
+            dlg_flag = 0;
+            dlg.close();
+            
+            myviz->setEnabled(true);
+            
+            QMessageBox::information(myviz,"IMU IS Ready","IMU is Ready! \n Start:   data get start! \n Pause: data get stop! \n Exit:    data get exit!");
+            dlg_flag = 3;
+        }
+        if(myviz!=NULL)
+        {
+		    myviz->setTimestate();
+		}
+		
+		//save control
+		msg_save_control.data = save_control;
+		pub_msg_save.publish(msg_save_control);
+		
+		//shulter & gain
+		msg_cam_shulter.data  = cam_shulter;
+	    pub_msg_shulter.publish(msg_cam_shulter);
+				
+		msg_cam_gain.data     = cam_gain;
+		pub_msg_gain.publish(msg_cam_gain);
+		
+		        
+        QEventLoop eventloop;  
+        QTimer::singleShot(800, &eventloop, SLOT(quit())); //wait 2s  
+        eventloop.exec();
+    }
+    //exec
+    app.exec();
+
+    cout<<"app go to next !"<<endl;
+
+    return 0;
+}
+
+

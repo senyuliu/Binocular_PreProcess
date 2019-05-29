@@ -1,0 +1,148 @@
+#ifndef MYVIZ_H
+#define MYVIZ_H
+
+#include <QSlider>
+#include <QLabel>
+#include <QPushButton>
+#include <QGridLayout>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <QLineEdit>
+#include <unistd.h>
+#include <QPixmap>  
+#include <QMessageBox> 
+#include <QEventLoop>
+#include <QTimer>
+#include <string>
+#include "ntd_info_process/processed_infor_msg.h"
+
+using namespace std;
+
+extern ntd_info_process::processed_infor_msg g_data_Infos;
+
+namespace rviz
+{
+class Display;
+class RenderPanel;
+class VisualizationManager;
+}
+
+struct data_Infos_t
+{
+    double GPStime;
+    double lat;
+    double lon;
+    double hei;
+    double current_speed;
+    unsigned char nsv1_num;
+    unsigned char nsv2_num;
+	double  camera_fps;
+	double  hdop;
+	string  pps_status;
+	double  longitude;
+	double  latitude;
+	int     noSV_422;
+};
+
+//extern data_Infos_t g_data_Infos;
+
+// BEGIN_TUTORIAL
+// Class "MyViz" implements the top level widget for this example.
+class MyViz: public QWidget
+{
+Q_OBJECT
+public:
+  MyViz( QWidget* parent = 0 );
+  virtual ~MyViz();
+
+public Q_SLOTS:
+  void setThickness( int thickness_percent );
+  void setCellSize( int cell_size_percent );
+  void setCelltest( int cell_test_percent );
+  void onButtonClicked(void);
+  void onButtonEndClicked(void);
+  void onButtonOutClicked(void);
+  void setSpeedstate(void);
+
+public:
+  rviz::VisualizationManager* manager_imu;
+  rviz::VisualizationManager* manager_cam;
+  rviz::VisualizationManager* manager_lidar;
+
+  rviz::Display* grid_imu;
+  rviz::Display* grid_cam;
+  rviz::Display* grid_lidar;
+
+public: 
+  QLabel * thickness_label;
+  QSlider* thickness_slider;
+  QLabel * cell_size_label  ;
+  QSlider* cell_size_slider;
+  QLabel * cell_test_label  ;
+  QSlider* cell_test_slider;
+  QLabel * push_start_label;
+  QPushButton* push_start_button; 
+  //QPushButton* push_end_button;
+  QPushButton* push_out_button;
+
+  QLabel *     cam_fps_label;
+  QLineEdit*   cam_fps_edit;
+
+  QLineEdit*   imu_time_edit;
+  QLineEdit*   imu_speed_edit;
+
+  QLabel * lidar_image_label;
+  QImage * lidar_image;
+
+  QLabel * lidar_ImagePPS_label;
+  QImage * lidar_image_PPS;
+
+  QLabel * label_imu;
+  QLabel * label_cam;
+  QLabel * label_lidar;
+
+  QImage * cam_image;
+  QLabel * cam_image_label;
+
+  QLabel * speed_image_label;
+  QImage * speed_image;
+
+  QLineEdit* label_GNSS_num;
+  QLineEdit* label_GNSS_pdop;
+
+  QLineEdit* label_UTC_time;
+  QLineEdit* label_state;
+
+  QGridLayout* controls_layout;
+  QVBoxLayout* main_layout;
+
+  QEventLoop eventloop;
+
+public:
+  int width;
+  int height;
+public:
+  //window size
+  QSize sizeHint() const;
+  void setcellchange(int cell_change);
+  //grid state
+  void setgpstate(bool);
+  void setGPRMCstate(bool);
+  void setPPSstate(bool);
+  //void setSpeedstate(void);
+  //show times
+  void setTimestate(void);
+  //show speed
+  void showSpeed(int speed);
+  //state bar
+  void showState(int stat);
+  //show imu cnt
+  void showImucnt(int imucnt);
+  //show gnss num
+  void show_GNSS_num(int gnss_num);
+  //show struct
+  void show_g_data_center_st(ntd_info_process::processed_infor_msg& g_data_Infos);
+  
+};
+// END_TUTORIAL
+#endif // MYVIZ_H
